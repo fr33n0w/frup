@@ -1,9 +1,10 @@
 import requests
 import subprocess
+import keyboard
 
 # Print the title
 print("==============================================")
-print("      Fast Reticulum Updater v0.3 by F")
+print("      Fast Reticulum Updater v0.5 by F")
 print("==============================================")
 
 # List of packages to check
@@ -13,19 +14,22 @@ packages = [
     {'name': 'NomadNet', 'url': 'https://github.com/markqvist/nomadnet'},
     {'name': 'MeshChat', 'url': 'https://github.com/liamcottle/reticulum-meshchat', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
     {'name': 'Sideband', 'url': 'https://github.com/markqvist/Sideband', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
-    {'name': 'RNode CE', 'url': 'https://github.com/liberatedsystems/RNode_Firmware_CE', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True}
+    {'name': 'RNode Stock', 'url': 'https://github.com/markqvist/RNode_Firmware', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
+    {'name': 'RNode CE', 'url': 'https://github.com/liberatedsystems/RNode_Firmware_CE', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
+    {'name': 'RNode Micro TN', 'url': 'https://github.com/attermann/microReticulum_Firmware', 'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True}
 ]
 
 # Online versions
 print("\n**Latest GitHub Versions:**")
 for package in packages:
     github_repo = package['url'].split('/')[-2] + '/' + package['url'].split('/')[-1]
-    response = requests.get(f"https://api.github.com/repos/{github_repo}/releases/latest")
-    if response.status_code == 200:
+    try:
+        response = requests.get(f"https://api.github.com/repos/{github_repo}/releases/latest")
+        response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
         latest_version = response.json()["tag_name"]
         print(f"* {package['name']}: {latest_version}")
-    else:
-        print(f"* {package['name']}: Failed to retrieve latest version from GitHub")
+    except requests.exceptions.RequestException as e:
+        print(f"* {package['name']}: Failed to retrieve latest version from GitHub ({e})")
 
 # Local versions
 print("\n**Local Installed Versions:**")
@@ -43,10 +47,12 @@ print("\n**Version Comparison for Update Installation:**")
 for package in packages:
     if not ('skip_local_check' in package and package['skip_local_check']) and not ('skip_version_comparison' in package and package['skip_version_comparison']) and not ('online_only' in package and package['online_only']):
         github_repo = package['url'].split('/')[-2] + '/' + package['url'].split('/')[-1]
-        response = requests.get(f"https://api.github.com/repos/{github_repo}/releases/latest")
-        if response.status_code == 200:
+        try:
+            response = requests.get(f"https://api.github.com/repos/{github_repo}/releases/latest")
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
             latest_version = response.json()["tag_name"]
-        else:
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching latest version: {e}")
             latest_version = None
 
         try:
@@ -77,5 +83,9 @@ for package in packages:
 
 # Final message
 print("\n=====================================================")
-print("       Update process complete! F.R.U. v0.3 END")
-print("=======================================================")
+print("       Update process complete! F.R.U. v0.5 END")
+print("======================================================")
+
+# Wait for a key press to exit
+print("----------- Press any key to exit...  -------------")
+keyboard.read_key()

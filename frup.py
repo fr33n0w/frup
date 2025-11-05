@@ -1,10 +1,10 @@
 import requests
 import subprocess
-import keyboard
 
 # Print the title
+print()
 print("==============================================")
-print("      Fast Reticulum Updater v0.5 by F")
+print("      Fast Reticulum Updater v0.6 by F")
 print("==============================================")
 
 # List of packages to check
@@ -83,9 +83,10 @@ for package in packages:
 
 # Final message
 print("\n=====================================================")
-print("       Update process complete! F.R.U. v0.5 END")
+print("       Update process complete! F.R.U. v0.6 END")
 print("======================================================")
 
 # Wait for a key press to exit
-print("----------- Press any key to exit...  -------------")
-keyboard.read_key()
+print()
+print("-------------  Press ENTER to exit...  ---------------")
+input()

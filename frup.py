@@ -124,7 +124,7 @@ class ReticulumUpdater:
             try:
                 response = requests.get(
                     f"https://api.github.com/repos/{repo}/releases/latest",
-                    timeout=10,
+                    timeout=30,
                     headers={'Accept': 'application/vnd.github.v3+json'}
                 )
                 response.raise_for_status()
@@ -162,7 +162,7 @@ class ReticulumUpdater:
                     ["pip", "show", package['name']], 
                     capture_output=True, 
                     text=True,
-                    timeout=5
+                    timeout=30
                 )
                 
                 if result.returncode == 0:

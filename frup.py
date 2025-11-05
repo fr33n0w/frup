@@ -28,10 +28,11 @@ except ImportError:
     GREEN = RED = YELLOW = CYAN = RESET = BRIGHT = ""
 
 class ReticulumUpdater:
-    def __init__(self, auto_update=False, quiet=False, check_only=False):
+    def __init__(self, auto_update=False, quiet=False, check_only=False, break_system=False):
         self.auto_update = auto_update
         self.quiet = quiet
         self.check_only = check_only
+        self.break_system = break_system
         self.github_versions = {}
         self.local_versions = {}
         self.updated = []
@@ -40,6 +41,7 @@ class ReticulumUpdater:
         self.already_updated = []
         self.using_custom_config = False
         self.config_path = None
+        self.needs_break_system = False
         
         # Default packages - can be overridden by config file
         self.packages = [
@@ -248,20 +250,57 @@ class ReticulumUpdater:
                 
                 if response == 'y':
                     print(f"  {CYAN}{action.capitalize()}ing {name}...{RESET}")
+                    
+                    # Prepare pip command
+                    pip_cmd = ["pip", "install", "--upgrade", name]
+                    
+                    # Try without --break-system-packages first
                     try:
                         result = subprocess.run(
-                            ["pip", "install", "--upgrade", name],
+                            pip_cmd,
                             capture_output=True,
                             text=True,
                             timeout=120
                         )
+                        
+                        # If failed due to externally-managed-environment, retry with flag
+                        if result.returncode != 0 and "externally-managed-environment" in result.stderr:
+                            if not self.quiet:
+                                print(f"  {YELLOW}System requires --break-system-packages flag, retrying...{RESET}")
+                            self.needs_break_system = True
+                            
+                            if self.break_system:
+                                pip_cmd.append("--break-system-packages")
+                            else:
+                                # Ask user for permission if not already given
+                                if not self.quiet:
+                                    print(f"  {YELLOW}This system requires --break-system-packages flag.{RESET}")
+                                    retry = input(f"  Retry with --break-system-packages? (y/n): ").strip().lower()
+                                    if retry == 'y':
+                                        pip_cmd.append("--break-system-packages")
+                                    else:
+                                        print(f"  {YELLOW}Skipped {name} (requires --break-system-packages){RESET}")
+                                        self.skipped.append(name)
+                                        continue
+                                else:
+                                    # In quiet mode with no permission, skip
+                                    self.failed.append(name)
+                                    continue
+                            
+                            # Retry with the flag
+                            result = subprocess.run(
+                                pip_cmd,
+                                capture_output=True,
+                                text=True,
+                                timeout=120
+                            )
                         
                         if result.returncode == 0:
                             print(f"  {GREEN}✓ {name} {action}d successfully!{RESET}")
                             self.updated.append(name)
                         else:
                             print(f"  {RED}✗ Failed to {action} {name}{RESET}")
-                            if result.stderr:
+                            if result.stderr and not "externally-managed-environment" in result.stderr:
                                 print(f"    Error: {result.stderr[:200]}")
                             self.failed.append(name)
                     
@@ -296,6 +335,11 @@ class ReticulumUpdater:
         
         if not any([self.updated, self.skipped, self.failed, self.already_updated]):
             print(f"{CYAN}No actions taken.{RESET}")
+        
+        # Suggest --break-system-packages if needed and not used
+        if self.needs_break_system and not self.break_system and self.failed:
+            print(f"\n{YELLOW}ℹ Tip: Run with --break-system-packages flag to force updates{RESET}")
+            print(f"  {CYAN}Example: python3 frup.py --break-system-packages --auto{RESET}")
         
         # Final status
         print(f"\n{BRIGHT}=============================================={RESET}")
@@ -332,6 +376,7 @@ Examples:
   frup.py --check-only     # Only check versions without updating
   frup.py --quiet --auto   # Silent auto-update
   frup.py --save-config    # Save example config file
+  frup.py -b --auto        # Auto-update with --break-system-packages
         """
     )
     
@@ -360,6 +405,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--break-system-packages', '-b',
+        action='store_true',
+        help='Use --break-system-packages flag for pip (required on some systems)'
+    )
+    
+    parser.add_argument(
         '--version', '-v',
         action='version',
         version='Fast Reticulum Updater v0.7'
@@ -371,7 +422,8 @@ Examples:
     updater = ReticulumUpdater(
         auto_update=args.auto,
         quiet=args.quiet,
-        check_only=args.check_only
+        check_only=args.check_only,
+        break_system=args.break_system_packages
     )
     
     # Handle config save

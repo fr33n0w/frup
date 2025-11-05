@@ -20,6 +20,7 @@ A Python tool to check and update Reticulum ecosystem packages.
 - `--auto` / `-a` : Automatically update all packages without prompting
 - `--check-only` / `-c` : Only check versions without updating
 - `--quiet` / `-q` : Minimal output (errors and summary only)
+- `--break-system-packages` / `-b` : Use --break-system-packages flag for pip (required on some systems)
 - `--save-config` : Generate example configuration file
 - `--version` / `-v` : Show version information
 - `--help` / `-h` : Show help message
@@ -68,6 +69,18 @@ Shows all information and prompts for each update.
 python3 frup.py --auto
 ```
 Automatically updates all out-of-date packages without prompting.
+
+### For Systems Requiring --break-system-packages (Debian 12+, Ubuntu 23.04+)
+```bash
+# Interactive with system packages flag
+python3 frup.py --break-system-packages
+
+# Auto-update with system packages flag
+python3 frup.py --break-system-packages --auto
+
+# Short form
+python3 frup.py -b -a
+```
 
 ### Check Only (no updates)
 ```bash
@@ -145,6 +158,15 @@ Created by F
 Open source - feel free to modify and distribute
 
 ## Troubleshooting
+
+### "externally-managed-environment" error?
+Modern systems (Debian 12+, Ubuntu 23.04+, etc.) require the `--break-system-packages` flag:
+```bash
+python3 frup.py --break-system-packages --auto
+# or short form
+python3 frup.py -b -a
+```
+The script will automatically detect this and prompt you to retry with the flag if needed.
 
 ### No colored output?
 Install colorama: `pip install colorama`

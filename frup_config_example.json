@@ -1,0 +1,65 @@
+{
+  "comment": "Fast Reticulum Updater Configuration - Customize packages to check/update",
+  "packages": [
+    {
+      "name": "RNS",
+      "url": "https://github.com/markqvist/Reticulum"
+    },
+    {
+      "name": "LXMF",
+      "url": "https://github.com/markqvist/lxmf"
+    },
+    {
+      "name": "NomadNet",
+      "url": "https://github.com/markqvist/nomadnet"
+    },
+    {
+      "name": "MeshChat",
+      "url": "https://github.com/liamcottle/reticulum-meshchat",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    },
+    {
+      "name": "Sideband",
+      "url": "https://github.com/markqvist/Sideband",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    },
+    {
+      "name": "RNode Stock",
+      "url": "https://github.com/markqvist/RNode_Firmware",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    },
+    {
+      "name": "RNode CE",
+      "url": "https://github.com/liberatedsystems/RNode_Firmware_CE",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    },
+    {
+      "name": "RNode Micro TN",
+      "url": "https://github.com/attermann/microReticulum_Firmware",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    }
+  ],
+  "additional_packages_example": [
+    {
+      "name": "some-other-package",
+      "url": "https://github.com/user/repo",
+      "manual_install": false,
+      "comment": "Add your own packages here"
+    }
+  ]
+}

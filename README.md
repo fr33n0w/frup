@@ -1,8 +1,10 @@
-# Fast Reticulum Updater (F.R.U.) v0.7
+# Fast Reticulum Updater (F.R.U.) v0.8
 
 A Python tool to check and update Reticulum ecosystem packages.
 
-## New Features in v0.7
+## New Features in v0.8
+
+Minor fix: Fixed display typo "updateing" bug
 
 ### 🚀 Performance
 - **Single API call per package** - Caches GitHub version checks
@@ -145,6 +147,7 @@ When starting, the script displays which configuration it's using:
 
 ## Version History
 
+- **v0.8** - Minor fix of "updateing" display typo bug
 - **v0.7** - Major rewrite with CLI args, config files, colored output, better error handling
 - **v0.6** - Fixed Linux keyboard permission issue
 - **v0.5** - Initial version

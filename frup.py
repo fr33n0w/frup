@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Fast Reticulum Updater v0.7
+Fast Reticulum Updater v0.8
 Author: F
-Improvements: Efficiency, error handling, CLI arguments, colored output, summary
+Improvements: Efficiency, error handling, CLI arguments, colored output, summary, fixed updateeing display bug
 """
 
 import requests
@@ -103,7 +103,7 @@ class ReticulumUpdater:
         if not self.quiet:
             print()
             print(f"{BRIGHT}=============================================={RESET}")
-            print(f"{BRIGHT}      Fast Reticulum Updater v0.7 by F{RESET}")
+            print(f"{BRIGHT}      Fast Reticulum Updater v0.8 by F{RESET}")
             print(f"{BRIGHT}=============================================={RESET}")
             
             # Show config status
@@ -244,12 +244,14 @@ class ReticulumUpdater:
             if should_update:
                 if self.auto_update:
                     response = 'y'
-                    print(f"  {CYAN}Auto-{action}ing...{RESET}")
+                    action_verb = "installing" if action == "install" else "updating"
+                    print(f"  {CYAN}Auto-{action_verb}...{RESET}")
                 else:
                     response = input(f"  Do you want to {action} {name}? (y/n): ").strip().lower()
                 
                 if response == 'y':
-                    print(f"  {CYAN}{action.capitalize()}ing {name}...{RESET}")
+                    action_verb = "Installing" if action == "install" else "Updating"
+                    print(f"  {CYAN}{action_verb} {name}...{RESET}")
                     
                     # Prepare pip command
                     pip_cmd = ["pip", "install", "--upgrade", name]
@@ -344,9 +346,9 @@ class ReticulumUpdater:
         # Final status
         print(f"\n{BRIGHT}=============================================={RESET}")
         if self.check_only:
-            print(f"{BRIGHT}     Check Complete! F.R.U. v0.7 END{RESET}")
+            print(f"{BRIGHT}     Check Complete! F.R.U. v0.8 END{RESET}")
         else:
-            print(f"{BRIGHT}     Update Process Complete! F.R.U. v0.7 END{RESET}")
+            print(f"{BRIGHT}     Update Process Complete! F.R.U. v0.8 END{RESET}")
         print(f"{BRIGHT}=============================================={RESET}")
     
     def run(self):
@@ -367,7 +369,7 @@ class ReticulumUpdater:
 def main():
     """Main entry point with argument parsing"""
     parser = argparse.ArgumentParser(
-        description='Fast Reticulum Updater v0.7 - Update Reticulum ecosystem packages',
+        description='Fast Reticulum Updater v0.8 - Update Reticulum ecosystem packages',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -413,7 +415,7 @@ Examples:
     parser.add_argument(
         '--version', '-v',
         action='version',
-        version='Fast Reticulum Updater v0.7'
+        version='Fast Reticulum Updater v0.8'
     )
     
     args = parser.parse_args()

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Fast Reticulum Updater v0.8
+Fast Reticulum Updater v0.9
 Author: F
-Improvements: Efficiency, error handling, CLI arguments, colored output, summary, fixed updateeing display bug
+Improvements: PyPI-first approach, efficiency, error handling, CLI arguments, colored output, summary
 """
 
 import requests
@@ -33,7 +33,7 @@ class ReticulumUpdater:
         self.quiet = quiet
         self.check_only = check_only
         self.break_system = break_system
-        self.github_versions = {}
+        self.online_versions = {}
         self.local_versions = {}
         self.updated = []
         self.skipped = []
@@ -44,20 +44,45 @@ class ReticulumUpdater:
         self.needs_break_system = False
         
         # Default packages - can be overridden by config file
+        # NOTE: PyPI package names are used for pip installation
         self.packages = [
-            {'name': 'RNS', 'url': 'https://github.com/markqvist/Reticulum'},
-            {'name': 'LXMF', 'url': 'https://github.com/markqvist/lxmf'},
-            {'name': 'NomadNet', 'url': 'https://github.com/markqvist/nomadnet'},
-            {'name': 'MeshChat', 'url': 'https://github.com/liamcottle/reticulum-meshchat', 
-             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
-            {'name': 'Sideband', 'url': 'https://github.com/markqvist/Sideband', 
-             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
-            {'name': 'RNode Stock', 'url': 'https://github.com/markqvist/RNode_Firmware', 
-             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
-            {'name': 'RNode CE', 'url': 'https://github.com/liberatedsystems/RNode_Firmware_CE', 
-             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True},
-            {'name': 'RNode Micro TN', 'url': 'https://github.com/attermann/microReticulum_Firmware', 
-             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 'online_only': True}
+            # Protocol Stack - PyPI packages
+            {'name': 'rns', 'display_name': 'RNS', 'pypi_name': 'rns', 
+             'url': 'https://github.com/markqvist/Reticulum'},
+            {'name': 'lxmf', 'display_name': 'LXMF', 'pypi_name': 'lxmf', 
+             'url': 'https://github.com/markqvist/lxmf'},
+            {'name': 'lxst', 'display_name': 'LXST', 'pypi_name': 'lxst', 
+             'url': 'https://github.com/markqvist/lxst'},
+            
+            # Software - PyPI packages
+            {'name': 'nomadnet', 'display_name': 'NomadNet', 'pypi_name': 'nomadnet', 
+             'url': 'https://github.com/markqvist/nomadnet'},
+            {'name': 'sideband', 'display_name': 'Sideband', 'pypi_name': 'sbapp', 
+             'url': 'https://github.com/markqvist/Sideband'},
+            
+            # Software - GitHub only (manual install)
+            {'name': 'meshchat', 'display_name': 'MeshChat', 'pypi_name': None,
+             'url': 'https://github.com/liamcottle/reticulum-meshchat',
+             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 
+             'online_only': True},
+            {'name': 'columba', 'display_name': 'Columba', 'pypi_name': None,
+             'url': 'https://github.com/torlando-tech/columba',
+             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 
+             'online_only': True},
+            
+            # LoRa Firmware - GitHub only (manual install)
+            {'name': 'rnode', 'display_name': 'RNode', 'pypi_name': None,
+             'url': 'https://github.com/markqvist/RNode_Firmware',
+             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 
+             'online_only': True},
+            {'name': 'rnode_ce', 'display_name': 'RNode CE', 'pypi_name': None,
+             'url': 'https://github.com/liberatedsystems/RNode_Firmware_CE',
+             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 
+             'online_only': True},
+            {'name': 'rnode_tn', 'display_name': 'RNode TN', 'pypi_name': None,
+             'url': 'https://github.com/attermann/microReticulum_Firmware',
+             'manual_install': True, 'skip_local_check': True, 'skip_version_comparison': True, 
+             'online_only': True}
         ]
         
         # Load custom config if available
@@ -84,8 +109,98 @@ class ReticulumUpdater:
     def save_example_config(self):
         """Save an example configuration file"""
         example_config = {
-            "packages": self.packages,
-            "comment": "Customize this file to add/remove packages to check"
+            "comment": "Fast Reticulum Updater Configuration - Customize packages to check/update",
+            "packages": [
+                {
+                    "name": "rns",
+                    "display_name": "RNS",
+                    "pypi_name": "rns",
+                    "url": "https://github.com/markqvist/Reticulum"
+                },
+                {
+                    "name": "lxmf",
+                    "display_name": "LXMF",
+                    "pypi_name": "lxmf",
+                    "url": "https://github.com/markqvist/lxmf"
+                },
+                {
+                    "name": "lxst",
+                    "display_name": "LXST",
+                    "pypi_name": "lxst",
+                    "url": "https://github.com/markqvist/lxst"
+                },
+                {
+                    "name": "nomadnet",
+                    "display_name": "NomadNet",
+                    "pypi_name": "nomadnet",
+                    "url": "https://github.com/markqvist/nomadnet"
+                },
+                {
+                    "name": "sideband",
+                    "display_name": "Sideband",
+                    "pypi_name": "sbapp",
+                    "url": "https://github.com/markqvist/Sideband",
+                    "comment": "PyPI package name is 'sbapp'"
+                },
+                {
+                    "name": "meshchat",
+                    "display_name": "MeshChat",
+                    "pypi_name": null,
+                    "url": "https://github.com/liamcottle/reticulum-meshchat",
+                    "manual_install": true,
+                    "skip_local_check": true,
+                    "skip_version_comparison": true,
+                    "online_only": true
+                },
+                {
+                    "name": "columba",
+                    "display_name": "Columba",
+                    "pypi_name": null,
+                    "url": "https://github.com/torlando-tech/columba",
+                    "manual_install": true,
+                    "skip_local_check": true,
+                    "skip_version_comparison": true,
+                    "online_only": true
+                },
+                {
+                    "name": "rnode",
+                    "display_name": "RNode",
+                    "pypi_name": null,
+                    "url": "https://github.com/markqvist/RNode_Firmware",
+                    "manual_install": true,
+                    "skip_local_check": true,
+                    "skip_version_comparison": true,
+                    "online_only": true
+                },
+                {
+                    "name": "rnode_ce",
+                    "display_name": "RNode CE",
+                    "pypi_name": null,
+                    "url": "https://github.com/liberatedsystems/RNode_Firmware_CE",
+                    "manual_install": true,
+                    "skip_local_check": true,
+                    "skip_version_comparison": true,
+                    "online_only": true
+                },
+                {
+                    "name": "rnode_tn",
+                    "display_name": "RNode TN",
+                    "pypi_name": null,
+                    "url": "https://github.com/attermann/microReticulum_Firmware",
+                    "manual_install": true,
+                    "skip_local_check": true,
+                    "skip_version_comparison": true,
+                    "online_only": true
+                }
+            ],
+            "notes": [
+                "pypi_name: The package name on PyPI (for pip install)",
+                "name: Internal identifier (lowercase, no spaces)",
+                "display_name: Human-readable name shown to user",
+                "manual_install: true = Cannot be installed via pip",
+                "online_only: true = Only check online version, don't show in updates",
+                "Set pypi_name to null for GitHub-only packages"
+            ]
         }
         with open('frup_config_example.json', 'w') as f:
             json.dump(example_config, f, indent=2)
@@ -103,7 +218,8 @@ class ReticulumUpdater:
         if not self.quiet:
             print()
             print(f"{BRIGHT}=============================================={RESET}")
-            print(f"{BRIGHT}      Fast Reticulum Updater v0.8 by F{RESET}")
+            print(f"{BRIGHT}      Fast Reticulum Updater v0.9 by F{RESET}")
+            print(f"{BRIGHT}      Now with PyPI-first checking!{RESET}")
             print(f"{BRIGHT}=============================================={RESET}")
             
             # Show config status
@@ -112,37 +228,60 @@ class ReticulumUpdater:
             else:
                 print(f"{CYAN}Using default configuration{RESET}")
     
-    def fetch_github_versions(self):
-        """Fetch all GitHub versions in one pass"""
-        if not self.quiet:
-            print(f"\n{BRIGHT}** Fetching Latest GitHub Versions **{RESET}")
-        
-        for package in self.packages:
-            repo_parts = package['url'].split('/')
+    def fetch_pypi_version(self, package_name: str) -> Optional[str]:
+        """Fetch version from PyPI"""
+        try:
+            response = requests.get(
+                f"https://pypi.org/pypi/{package_name}/json",
+                timeout=10
+            )
+            response.raise_for_status()
+            version = response.json()['info']['version']
+            return version
+        except requests.exceptions.RequestException:
+            return None
+    
+    def fetch_github_version(self, repo_url: str) -> Optional[str]:
+        """Fetch version from GitHub releases"""
+        try:
+            repo_parts = repo_url.split('/')
             repo = f"{repo_parts[-2]}/{repo_parts[-1]}"
             
-            try:
-                response = requests.get(
-                    f"https://api.github.com/repos/{repo}/releases/latest",
-                    timeout=30,
-                    headers={'Accept': 'application/vnd.github.v3+json'}
-                )
-                response.raise_for_status()
-                version = response.json().get("tag_name", "Unknown")
-                self.github_versions[package['name']] = version
-                
-                if not self.quiet:
-                    print(f"  {GREEN}✓{RESET} {package['name']}: {CYAN}{version}{RESET}")
+            response = requests.get(
+                f"https://api.github.com/repos/{repo}/releases/latest",
+                timeout=10,
+                headers={'Accept': 'application/vnd.github.v3+json'}
+            )
+            response.raise_for_status()
+            version = response.json().get("tag_name", "Unknown")
+            return version
+        except requests.exceptions.RequestException:
+            return None
+    
+    def fetch_online_versions(self):
+        """Fetch all online versions (PyPI first, then GitHub)"""
+        if not self.quiet:
+            print(f"\n{BRIGHT}** Fetching Latest Versions **{RESET}")
+        
+        for package in self.packages:
+            display_name = package.get('display_name', package['name'])
             
-            except requests.exceptions.Timeout:
-                self.github_versions[package['name']] = None
-                if not self.quiet:
-                    print(f"  {YELLOW}⚠{RESET} {package['name']}: Timeout")
+            # Try PyPI first if pypi_name is specified
+            if package.get('pypi_name'):
+                version = self.fetch_pypi_version(package['pypi_name'])
+                source = "PyPI"
+            else:
+                # Fallback to GitHub for packages not on PyPI
+                version = self.fetch_github_version(package['url'])
+                source = "GitHub"
             
-            except requests.exceptions.RequestException as e:
-                self.github_versions[package['name']] = None
-                if not self.quiet:
-                    print(f"  {RED}✗{RESET} {package['name']}: Failed to fetch")
+            self.online_versions[package['name']] = version
+            
+            if not self.quiet:
+                if version:
+                    print(f"  {GREEN}✓{RESET} {display_name}: {CYAN}{version}{RESET} ({source})")
+                else:
+                    print(f"  {YELLOW}⚠{RESET} {display_name}: Failed to fetch from {source}")
     
     def check_local_versions(self):
         """Check locally installed versions"""
@@ -150,16 +289,21 @@ class ReticulumUpdater:
             print(f"\n{BRIGHT}** Local Installed Versions **{RESET}")
         
         for package in self.packages:
+            display_name = package.get('display_name', package['name'])
+            
             # Skip packages marked as online_only or skip_local_check
             if package.get('skip_local_check') or package.get('online_only'):
                 self.local_versions[package['name']] = None
                 if not self.quiet and not package.get('online_only'):
-                    print(f"  {YELLOW}−{RESET} {package['name']}: Skipped")
+                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped")
                 continue
+            
+            # Use pypi_name for pip show if available, otherwise use name
+            pip_package_name = package.get('pypi_name') or package['name']
             
             try:
                 result = subprocess.run(
-                    ["pip", "show", package['name']], 
+                    ["pip", "show", pip_package_name], 
                     capture_output=True, 
                     text=True,
                     timeout=30
@@ -171,22 +315,22 @@ class ReticulumUpdater:
                             version = line.split(":")[1].strip()
                             self.local_versions[package['name']] = version
                             if not self.quiet:
-                                print(f"  {GREEN}✓{RESET} {package['name']}: {CYAN}{version}{RESET}")
+                                print(f"  {GREEN}✓{RESET} {display_name}: {CYAN}{version}{RESET}")
                             break
                 else:
                     self.local_versions[package['name']] = None
                     if not self.quiet:
-                        print(f"  {YELLOW}−{RESET} {package['name']}: Not installed")
+                        print(f"  {YELLOW}−{RESET} {display_name}: Not installed")
             
             except subprocess.TimeoutExpired:
                 self.local_versions[package['name']] = None
                 if not self.quiet:
-                    print(f"  {YELLOW}⚠{RESET} {package['name']}: Check timeout")
+                    print(f"  {YELLOW}⚠{RESET} {display_name}: Check timeout")
             
             except Exception as e:
                 self.local_versions[package['name']] = None
                 if not self.quiet:
-                    print(f"  {RED}✗{RESET} {package['name']}: Error checking")
+                    print(f"  {RED}✗{RESET} {display_name}: Error checking")
     
     def compare_and_update(self):
         """Compare versions and optionally update packages"""
@@ -201,39 +345,40 @@ class ReticulumUpdater:
                 continue
             
             name = package['name']
-            github_version = self.github_versions.get(name)
+            display_name = package.get('display_name', name)
+            online_version = self.online_versions.get(name)
             local_version = self.local_versions.get(name)
             
             # Normalize versions for comparison
-            norm_github = self.normalize_version(github_version)
+            norm_online = self.normalize_version(online_version)
             norm_local = self.normalize_version(local_version)
             
-            print(f"\n{BRIGHT}{name}:{RESET}")
+            print(f"\n{BRIGHT}{display_name}:{RESET}")
             
             # Check if versions could be retrieved
-            if github_version is None:
-                print(f"  {RED}Cannot compare - GitHub version unavailable{RESET}")
-                self.failed.append(name)
+            if online_version is None:
+                print(f"  {RED}Cannot compare - Online version unavailable{RESET}")
+                self.failed.append(display_name)
                 continue
             
             # Compare versions
             if local_version is None:
-                print(f"  {YELLOW}Not installed{RESET} (Available: {CYAN}{github_version}{RESET})")
+                print(f"  {YELLOW}Not installed{RESET} (Available: {CYAN}{online_version}{RESET})")
                 action = "install"
                 should_update = True
-            elif norm_local == norm_github:
+            elif norm_local == norm_online:
                 print(f"  {GREEN}✓ Up to date!{RESET} ({CYAN}{local_version}{RESET})")
-                self.already_updated.append(name)
+                self.already_updated.append(display_name)
                 continue
             else:
-                print(f"  {YELLOW}Update available:{RESET} {local_version} → {CYAN}{github_version}{RESET}")
+                print(f"  {YELLOW}Update available:{RESET} {local_version} → {CYAN}{online_version}{RESET}")
                 action = "update"
                 should_update = True
             
             # Handle manual install packages
             if package.get('manual_install'):
                 print(f"  {CYAN}ℹ Please {action} manually from: {package['url']}{RESET}")
-                self.skipped.append(name)
+                self.skipped.append(display_name)
                 continue
             
             # Skip if check-only mode
@@ -247,14 +392,17 @@ class ReticulumUpdater:
                     action_verb = "installing" if action == "install" else "updating"
                     print(f"  {CYAN}Auto-{action_verb}...{RESET}")
                 else:
-                    response = input(f"  Do you want to {action} {name}? (y/n): ").strip().lower()
+                    response = input(f"  Do you want to {action} {display_name}? (y/n): ").strip().lower()
                 
                 if response == 'y':
                     action_verb = "Installing" if action == "install" else "Updating"
-                    print(f"  {CYAN}{action_verb} {name}...{RESET}")
+                    print(f"  {CYAN}{action_verb} {display_name}...{RESET}")
+                    
+                    # Use pypi_name for pip install if available
+                    pip_package_name = package.get('pypi_name') or package['name']
                     
                     # Prepare pip command
-                    pip_cmd = ["pip", "install", "--upgrade", name]
+                    pip_cmd = ["pip", "install", "--upgrade", pip_package_name]
                     
                     # Try without --break-system-packages first
                     try:
@@ -281,12 +429,12 @@ class ReticulumUpdater:
                                     if retry == 'y':
                                         pip_cmd.append("--break-system-packages")
                                     else:
-                                        print(f"  {YELLOW}Skipped {name} (requires --break-system-packages){RESET}")
-                                        self.skipped.append(name)
+                                        print(f"  {YELLOW}Skipped {display_name} (requires --break-system-packages){RESET}")
+                                        self.skipped.append(display_name)
                                         continue
                                 else:
                                     # In quiet mode with no permission, skip
-                                    self.failed.append(name)
+                                    self.failed.append(display_name)
                                     continue
                             
                             # Retry with the flag
@@ -298,24 +446,24 @@ class ReticulumUpdater:
                             )
                         
                         if result.returncode == 0:
-                            print(f"  {GREEN}✓ {name} {action}d successfully!{RESET}")
-                            self.updated.append(name)
+                            print(f"  {GREEN}✓ {display_name} {action}d successfully!{RESET}")
+                            self.updated.append(display_name)
                         else:
-                            print(f"  {RED}✗ Failed to {action} {name}{RESET}")
+                            print(f"  {RED}✗ Failed to {action} {display_name}{RESET}")
                             if result.stderr and not "externally-managed-environment" in result.stderr:
                                 print(f"    Error: {result.stderr[:200]}")
-                            self.failed.append(name)
+                            self.failed.append(display_name)
                     
                     except subprocess.TimeoutExpired:
-                        print(f"  {RED}✗ {action.capitalize()} timeout for {name}{RESET}")
-                        self.failed.append(name)
+                        print(f"  {RED}✗ {action.capitalize()} timeout for {display_name}{RESET}")
+                        self.failed.append(display_name)
                     
                     except Exception as e:
-                        print(f"  {RED}✗ Error {action}ing {name}: {str(e)}{RESET}")
-                        self.failed.append(name)
+                        print(f"  {RED}✗ Error {action}ing {display_name}: {str(e)}{RESET}")
+                        self.failed.append(display_name)
                 else:
-                    print(f"  {YELLOW}Skipped {name}{RESET}")
-                    self.skipped.append(name)
+                    print(f"  {YELLOW}Skipped {display_name}{RESET}")
+                    self.skipped.append(display_name)
     
     def print_summary(self):
         """Print a summary of actions taken"""
@@ -346,9 +494,9 @@ class ReticulumUpdater:
         # Final status
         print(f"\n{BRIGHT}=============================================={RESET}")
         if self.check_only:
-            print(f"{BRIGHT}     Check Complete! F.R.U. v0.8 END{RESET}")
+            print(f"{BRIGHT}     Check Complete! F.R.U. v0.9 END{RESET}")
         else:
-            print(f"{BRIGHT}     Update Process Complete! F.R.U. v0.8 END{RESET}")
+            print(f"{BRIGHT}     Update Process Complete! F.R.U. v0.9 END{RESET}")
         print(f"{BRIGHT}=============================================={RESET}")
     
     def run(self):
@@ -356,7 +504,7 @@ class ReticulumUpdater:
         self.print_header()
         
         # Fetch all versions
-        self.fetch_github_versions()
+        self.fetch_online_versions()
         self.check_local_versions()
         
         # Compare and potentially update
@@ -369,7 +517,7 @@ class ReticulumUpdater:
 def main():
     """Main entry point with argument parsing"""
     parser = argparse.ArgumentParser(
-        description='Fast Reticulum Updater v0.8 - Update Reticulum ecosystem packages',
+        description='Fast Reticulum Updater v0.9 - Update Reticulum ecosystem packages',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -379,6 +527,12 @@ Examples:
   frup.py --quiet --auto   # Silent auto-update
   frup.py --save-config    # Save example config file
   frup.py -b --auto        # Auto-update with --break-system-packages
+
+Changes in v0.9:
+  - Now checks PyPI first (faster, more reliable)
+  - Added LXST and Columba packages
+  - Sideband now uses correct PyPI name (sbapp)
+  - GitHub used only for non-PyPI packages
         """
     )
     
@@ -415,7 +569,7 @@ Examples:
     parser.add_argument(
         '--version', '-v',
         action='version',
-        version='Fast Reticulum Updater v0.8'
+        version='Fast Reticulum Updater v0.9'
     )
     
     args = parser.parse_args()

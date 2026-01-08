@@ -1,65 +1,152 @@
 {
-  "comment": "Fast Reticulum Updater Configuration - Customize packages to check/update",
+  "comment": "Fast Reticulum Updater v0.9 Configuration",
+  "description": "Customize this file to add/remove packages to check and update. Rename to 'frup_config.json' to use.",
+  
   "packages": [
     {
-      "name": "RNS",
-      "url": "https://github.com/markqvist/Reticulum"
+      "name": "rns",
+      "display_name": "RNS",
+      "pypi_name": "rns",
+      "url": "https://github.com/markqvist/Reticulum",
+      "comment": "Reticulum Network Stack - Core protocol"
     },
     {
-      "name": "LXMF",
-      "url": "https://github.com/markqvist/lxmf"
+      "name": "lxmf",
+      "display_name": "LXMF",
+      "pypi_name": "lxmf",
+      "url": "https://github.com/markqvist/lxmf",
+      "comment": "Lightweight Extensible Message Format"
     },
     {
-      "name": "NomadNet",
-      "url": "https://github.com/markqvist/nomadnet"
+      "name": "lxst",
+      "display_name": "LXST",
+      "pypi_name": "lxst",
+      "url": "https://github.com/markqvist/lxst",
+      "comment": "LXMF Simple Terminal"
     },
     {
-      "name": "MeshChat",
+      "name": "nomadnet",
+      "display_name": "NomadNet",
+      "pypi_name": "nomadnet",
+      "url": "https://github.com/markqvist/nomadnet",
+      "comment": "Off-grid text communication and BBS"
+    },
+    {
+      "name": "sideband",
+      "display_name": "Sideband",
+      "pypi_name": "sbapp",
+      "url": "https://github.com/markqvist/Sideband",
+      "comment": "LXMF client for Android/Linux/macOS - PyPI name is 'sbapp'"
+    },
+    {
+      "name": "meshchat",
+      "display_name": "MeshChat",
+      "pypi_name": null,
       "url": "https://github.com/liamcottle/reticulum-meshchat",
       "manual_install": true,
       "skip_local_check": true,
       "skip_version_comparison": true,
-      "online_only": true
+      "online_only": true,
+      "comment": "Web-based mesh chat - GitHub only, manual installation required"
     },
     {
-      "name": "Sideband",
-      "url": "https://github.com/markqvist/Sideband",
+      "name": "columba",
+      "display_name": "Columba",
+      "pypi_name": null,
+      "url": "https://github.com/torlando-tech/columba",
       "manual_install": true,
       "skip_local_check": true,
       "skip_version_comparison": true,
-      "online_only": true
+      "online_only": true,
+      "comment": "Terminal-based LXMF client - GitHub only, manual installation required"
     },
     {
-      "name": "RNode Stock",
+      "name": "rnode",
+      "display_name": "RNode",
+      "pypi_name": null,
       "url": "https://github.com/markqvist/RNode_Firmware",
       "manual_install": true,
       "skip_local_check": true,
       "skip_version_comparison": true,
-      "online_only": true
+      "online_only": true,
+      "comment": "Official RNode firmware - Flash to hardware, not pip installable"
     },
     {
-      "name": "RNode CE",
+      "name": "rnode_ce",
+      "display_name": "RNode CE",
+      "pypi_name": null,
       "url": "https://github.com/liberatedsystems/RNode_Firmware_CE",
       "manual_install": true,
       "skip_local_check": true,
       "skip_version_comparison": true,
-      "online_only": true
+      "online_only": true,
+      "comment": "RNode Community Edition firmware - Flash to hardware"
     },
     {
-      "name": "RNode Micro TN",
+      "name": "rnode_tn",
+      "display_name": "RNode TN",
+      "pypi_name": null,
       "url": "https://github.com/attermann/microReticulum_Firmware",
       "manual_install": true,
       "skip_local_check": true,
       "skip_version_comparison": true,
-      "online_only": true
+      "online_only": true,
+      "comment": "TinyNode/microReticulum firmware - Flash to hardware"
     }
   ],
-  "additional_packages_example": [
-    {
-      "name": "some-other-package",
-      "url": "https://github.com/user/repo",
-      "manual_install": false,
-      "comment": "Add your own packages here"
+  
+  "field_descriptions": {
+    "name": "Internal identifier (lowercase, no spaces, used as key)",
+    "display_name": "Human-readable name shown to user in output",
+    "pypi_name": "Package name on PyPI for 'pip install'. Set to null for GitHub-only packages",
+    "url": "GitHub repository URL for reference and fallback checking",
+    "manual_install": "true = Cannot be installed via pip, only manual installation",
+    "skip_local_check": "true = Don't check if installed locally",
+    "skip_version_comparison": "true = Don't compare versions or offer updates",
+    "online_only": "true = Only fetch online version, don't show in comparison section",
+    "comment": "Optional field for your notes (ignored by FRUP)"
+  },
+  
+  "examples": {
+    "add_custom_pypi_package": {
+      "name": "mypackage",
+      "display_name": "My Package",
+      "pypi_name": "my-package-name",
+      "url": "https://github.com/user/repo"
+    },
+    "add_github_only_package": {
+      "name": "custom_firmware",
+      "display_name": "Custom Firmware",
+      "pypi_name": null,
+      "url": "https://github.com/user/firmware",
+      "manual_install": true,
+      "skip_local_check": true,
+      "skip_version_comparison": true,
+      "online_only": true
+    },
+    "add_installable_package_different_pypi_name": {
+      "name": "myapp",
+      "display_name": "MyApp",
+      "pypi_name": "myapp-reticulum",
+      "url": "https://github.com/user/myapp",
+      "comment": "PyPI name differs from display name"
     }
+  },
+  
+  "usage_tips": [
+    "Set pypi_name to null for packages only available on GitHub",
+    "Use manual_install: true for firmware or non-Python packages",
+    "online_only: true shows version but doesn't offer installation",
+    "Remove packages you don't want to track",
+    "Add your own custom packages to the 'packages' array",
+    "The 'name' field must be unique across all packages"
+  ],
+  
+  "notes": [
+    "FRUP checks PyPI first (faster), then falls back to GitHub if pypi_name is null",
+    "GitHub-only packages are fetched from releases/latest endpoint",
+    "Version comparison ignores 'v' or 'V' prefixes automatically",
+    "Packages marked manual_install will only show update notifications",
+    "Use --save-config to regenerate this example anytime"
   ]
 }

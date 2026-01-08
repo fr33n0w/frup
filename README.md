@@ -1,3 +1,63 @@
+# 🎉 FRUP v0.9 Update - PyPI-First Approach!
+
+> **Important Update (January 2026):** FRUP has been updated to check PyPI instead of GitHub for package versions. This makes version checking faster, more reliable, and aligns with how Reticulum packages are now being released.
+
+## What's New in v0.9
+
+### 🚀 Major Changes
+
+- **PyPI-First Checking**: Now checks PyPI.org directly for package versions (much faster!)
+- **GitHub Fallback**: Only uses GitHub for packages not available on PyPI
+- **New Packages Added**: 
+  - ✨ **LXST** - Reticulum Audio Protocol  
+  - ✨ **Columba** - Android-based LXMF client
+- **Fixed Sideband**: Now uses correct PyPI package name (`sbapp`)
+
+### 📦 Updated Package List
+
+**Automatically Updatable (PyPI):**
+- RNS, LXMF, LXST, NomadNet, Sideband
+
+**Information Only (GitHub - Manual Install):**
+- MeshChat, Columba, RNode, RNode CE, RNode TN
+
+### ⚡ Why This Update?
+
+Mark Qvist (Reticulum's author) now publishes releases primarily to PyPI rather than GitHub. This means:
+- ✅ Faster version checks (no GitHub API rate limits)
+- ✅ More reliable (PyPI has higher uptime)
+- ✅ Matches official release process
+- ✅ No need for GitHub tokens
+
+### 🔄 Migration Notes
+
+If you have a custom `frup_config.json`, you'll need to update it to use the new format:
+
+**Old format:**
+```json
+{
+  "name": "Sideband",
+  "url": "https://github.com/markqvist/Sideband"
+}
+```
+
+**New format:**
+```json
+{
+  "name": "sideband",
+  "display_name": "Sideband",
+  "pypi_name": "sbapp",
+  "url": "https://github.com/markqvist/Sideband"
+}
+```
+
+Generate a new example config with:
+```bash
+python3 frup.py --save-config
+```
+
+---
+
 # Fast Reticulum Updater (F.R.U.) v0.8
 
 A Python tool to check and update Reticulum ecosystem packages.

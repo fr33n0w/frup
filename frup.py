@@ -206,7 +206,11 @@ class ReticulumUpdater:
             {'name': 'lxmf', 'display_name': 'LXMF', 'pypi_name': 'lxmf', 
              'url': 'https://github.com/markqvist/lxmf'},
             {'name': 'lxst', 'display_name': 'LXST', 'pypi_name': 'lxst', 
-             'url': 'https://github.com/markqvist/lxst'},
+             'url': 'https://github.com/markqvist/lxst',
+             'system_dependencies': {
+                 'debian': ['python3-pyaudio', 'codec2'],  # For Debian/Ubuntu/Raspbian
+                 'check_command': 'apt'  # How to detect if this system uses these deps
+             }},
             
             # Software - PyPI packages
             {'name': 'nomadnet', 'display_name': 'NomadNet', 'pypi_name': 'nomadnet', 
@@ -214,7 +218,16 @@ class ReticulumUpdater:
             {'name': 'sideband', 'display_name': 'Sideband', 'pypi_name': 'sbapp', 
              'url': 'https://github.com/markqvist/Sideband',
              'requires_desktop': True,
-             'skip_on_pi_zero': True},  # Sideband requires compilation, too heavy for Pi Zero
+             'slow_on_pi_zero': True,  # Warn: compilation takes 30+ minutes on Pi Zero
+             'system_dependencies': {
+                 'debian': ['python3-pyaudio', 'codec2', 'xclip', 'xsel'],
+                 'debian_bookworm': ['python3-pip', 'python3-pyaudio', 'python3-dev', 
+                                     'python3-cryptography', 'build-essential', 'libopusfile0',
+                                     'libsdl2-dev', 'libavcodec-dev', 'libavdevice-dev',
+                                     'libavfilter-dev', 'portaudio19-dev', 'codec2',
+                                     'libcodec2-1.0', 'xclip', 'xsel'],
+                 'check_command': 'apt'
+             }},
             
             # Software - GitHub only (manual install)
             {'name': 'meshchat', 'display_name': 'MeshChat', 'pypi_name': None,
@@ -283,7 +296,12 @@ class ReticulumUpdater:
                     "name": "lxst",
                     "display_name": "LXST",
                     "pypi_name": "lxst",
-                    "url": "https://github.com/markqvist/lxst"
+                    "url": "https://github.com/markqvist/lxst",
+                    "system_dependencies": {
+                        "debian": ["python3-pyaudio", "codec2"],
+                        "check_command": "apt"
+                    },
+                    "comment": "Requires audio codec dependencies on Debian/Raspbian"
                 },
                 {
                     "name": "nomadnet",
@@ -297,8 +315,19 @@ class ReticulumUpdater:
                     "pypi_name": "sbapp",
                     "url": "https://github.com/markqvist/Sideband",
                     "requires_desktop": true,
-                    "skip_on_pi_zero": true,
-                    "comment": "PyPI package name is 'sbapp', requires desktop environment, skipped on Pi Zero (compilation too slow)"
+                    "slow_on_pi_zero": true,
+                    "system_dependencies": {
+                        "debian": ["python3-pyaudio", "codec2", "xclip", "xsel"],
+                        "debian_bookworm": [
+                            "python3-pip", "python3-pyaudio", "python3-dev",
+                            "python3-cryptography", "build-essential", "libopusfile0",
+                            "libsdl2-dev", "libavcodec-dev", "libavdevice-dev",
+                            "libavfilter-dev", "portaudio19-dev", "codec2",
+                            "libcodec2-1.0", "xclip", "xsel"
+                        ],
+                        "check_command": "apt"
+                    },
+                    "comment": "PyPI package name is 'sbapp', requires desktop, compiles slowly on Pi Zero (30+ min), Bookworm needs more build dependencies"
                 },
                 {
                     "name": "meshchat",
@@ -358,7 +387,8 @@ class ReticulumUpdater:
                 "manual_install: true = Cannot be installed via pip",
                 "online_only: true = Only check online version, don't show in updates",
                 "requires_desktop: true = Only install on systems with desktop environment",
-                "skip_on_pi_zero: true = Skip on Raspberry Pi Zero (too slow for compilation)",
+                "slow_on_pi_zero: true = Warn user about long compilation time on Pi Zero",
+                "system_dependencies: Object with 'debian' array and optional 'debian_bookworm' for Debian 12 specific deps",
                 "Set pypi_name to null for GitHub-only packages"
             ]
         }
@@ -393,7 +423,7 @@ class ReticulumUpdater:
                 if self.system.is_pi_zero:
                     print(f"  {YELLOW}⚠ Pi Zero detected - using extended timeout (5 minutes){RESET}")
                     print(f"  {YELLOW}⚠ Network issues? Script will auto-retry up to 5 times{RESET}")
-                    print(f"  {YELLOW}⚠ Sideband skipped - requires compilation (too slow for Pi Zero){RESET}")
+                    print(f"  {YELLOW}⚠ Sideband compilation may take 30+ minutes (be patient!){RESET}")
             
             # Warn about desktop-only packages if no desktop detected
             if self.system.should_skip_desktop_packages():
@@ -438,9 +468,6 @@ class ReticulumUpdater:
     
     def should_skip_package(self, package: dict) -> bool:
         """Determine if a package should be skipped based on system requirements"""
-        # Check if package should be skipped on Pi Zero
-        if package.get('skip_on_pi_zero') and self.system.is_pi_zero:
-            return True
         # Check if package requires desktop
         if package.get('requires_desktop') and self.system.should_skip_desktop_packages():
             return True
@@ -454,6 +481,109 @@ class ReticulumUpdater:
             return 240  # 4 minutes for other slow systems
         else:
             return 120  # 2 minutes for normal systems
+    
+    def install_system_dependencies(self, package: dict) -> bool:
+        """Install system dependencies if needed. Returns True if successful or not needed."""
+        system_deps = package.get('system_dependencies')
+        if not system_deps:
+            return True  # No dependencies needed
+        
+        display_name = package.get('display_name', package['name'])
+        check_cmd = system_deps.get('check_command', 'apt')
+        
+        # Check if the package manager is available
+        try:
+            result = subprocess.run(
+                ['which', check_cmd],
+                capture_output=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                # Package manager not available, skip dependency check
+                return True
+        except:
+            return True
+        
+        # Get the appropriate dependency list based on Debian version
+        deps_list = None
+        if check_cmd == 'apt':
+            # Check Debian version for Bookworm-specific dependencies
+            try:
+                if os.path.exists('/etc/os-release'):
+                    with open('/etc/os-release', 'r') as f:
+                        content = f.read().lower()
+                        if 'bookworm' in content or 'debian 12' in content:
+                            deps_list = system_deps.get('debian_bookworm', system_deps.get('debian', []))
+                        else:
+                            # Trixie (Debian 13) or newer - use simpler deps
+                            deps_list = system_deps.get('debian', [])
+            except:
+                pass
+            
+            # Fallback to debian deps if version detection failed
+            if not deps_list:
+                deps_list = system_deps.get('debian', [])
+        
+        if not deps_list:
+            return True
+        
+        # Check if we need to install any dependencies
+        missing_deps = []
+        for dep in deps_list:
+            try:
+                result = subprocess.run(
+                    ['dpkg', '-s', dep],
+                    capture_output=True,
+                    timeout=5
+                )
+                if result.returncode != 0:
+                    missing_deps.append(dep)
+            except:
+                # If we can't check, assume it's missing
+                missing_deps.append(dep)
+        
+        if not missing_deps:
+            return True  # All dependencies already installed
+        
+        # Ask user to install dependencies
+        if not self.quiet:
+            print(f"  {YELLOW}ℹ {display_name} requires system packages: {', '.join(missing_deps)}{RESET}")
+            
+            if self.auto_update:
+                print(f"  {YELLOW}ℹ Please install manually with: sudo apt install {' '.join(missing_deps)}{RESET}")
+                print(f"  {YELLOW}Skipping {display_name} (missing system dependencies){RESET}")
+                return False
+            else:
+                response = input(f"  Install system dependencies with 'sudo apt install'? (y/n): ").strip().lower()
+                
+                if response != 'y':
+                    print(f"  {YELLOW}Skipping {display_name} (dependencies not installed){RESET}")
+                    return False
+                
+                # Try to install dependencies
+                print(f"  {CYAN}Installing system dependencies (this may take a while)...{RESET}")
+                try:
+                    # Use longer timeout for Sideband's many dependencies
+                    timeout = 300 if len(missing_deps) > 10 else 120
+                    result = subprocess.run(
+                        ['sudo', 'apt', 'install', '-y'] + missing_deps,
+                        timeout=timeout
+                    )
+                    
+                    if result.returncode == 0:
+                        print(f"  {GREEN}✓ System dependencies installed{RESET}")
+                        return True
+                    else:
+                        print(f"  {RED}✗ Failed to install system dependencies{RESET}")
+                        return False
+                except subprocess.TimeoutExpired:
+                    print(f"  {RED}✗ Timeout installing system dependencies{RESET}")
+                    return False
+                except Exception as e:
+                    print(f"  {RED}✗ Error installing system dependencies: {e}{RESET}")
+                    return False
+        
+        return False
     
     def install_package_with_retry(self, pip_cmd: list, display_name: str, max_retries: int = 3) -> tuple:
         """Install package with retry logic for network failures"""
@@ -517,8 +647,7 @@ class ReticulumUpdater:
             # Skip if system requirements not met
             if self.should_skip_package(package):
                 if not self.quiet and not package.get('online_only'):
-                    skip_reason = "requires desktop" if package.get('requires_desktop') else "not compatible with Pi Zero"
-                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped ({skip_reason})")
+                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped (requires desktop)")
                 continue
             
             # Try PyPI first if pypi_name is specified
@@ -659,6 +788,22 @@ class ReticulumUpdater:
                     response = input(f"  Do you want to {action} {display_name}? (y/n): ").strip().lower()
                 
                 if response == 'y':
+                    # Warn about slow compilation on Pi Zero
+                    if self.system.is_pi_zero and package.get('slow_on_pi_zero'):
+                        if not self.quiet:
+                            print(f"  {YELLOW}⚠ WARNING: This will take 30+ minutes to compile on Pi Zero!{RESET}")
+                            if not self.auto_update:
+                                confirm = input(f"  Are you sure you want to continue? (y/n): ").strip().lower()
+                                if confirm != 'y':
+                                    print(f"  {YELLOW}Skipped {display_name}{RESET}")
+                                    self.skipped.append(display_name)
+                                    continue
+                    
+                    # Check and install system dependencies first
+                    if not self.install_system_dependencies(package):
+                        self.skipped.append(display_name)
+                        continue
+                    
                     action_verb = "Installing" if action == "install" else "Updating"
                     print(f"  {CYAN}{action_verb} {display_name}...{RESET}")
                     
@@ -807,6 +952,7 @@ Changes in v1.0:
   - Shows system information before update checks
   - Extended timeout for slow systems (Pi Zero gets 5 minutes)
   - Automatic retry on network failures (up to 5 times on Pi Zero)
+  - System dependency detection and installation (e.g., codec2 for LXST)
         """
     )
     

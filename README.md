@@ -17,11 +17,76 @@ FRUP correctly identifies and handles:
 - 🖥️ **Desktop Systems**: Full package support including Sideband
 - 🤖 **Termux (Android)**: Automatically skips desktop-only packages
 - 🥧 **Raspberry Pi OS**: Detects headless vs desktop configurations
+- 🐌 **Raspberry Pi Zero**: Extended timeout + warnings for slow packages (Sideband takes 30+ min to compile)
 - 🖧 **SSH/Server**: Recognizes remote sessions without desktop
 - 🐧 **Headless Linux**: Works on servers and minimal installations
 
+### Smart Timeout Handling
+
+FRUP automatically adjusts installation timeouts based on system speed:
+- **Pi Zero**: 5 minutes (very slow single-core ARM11)
+- **Other slow systems**: 4 minutes (single-core or Termux)
+- **Normal systems**: 2 minutes
+
+### Network Failure Resilience
+
+On slow systems like Pi Zero with unstable connections, FRUP automatically retries failed downloads:
+- **Pi Zero**: Up to 5 automatic retries on network failures
+- **Other systems**: Up to 3 automatic retries
+- Detects connection errors: "Connection aborted", "Remote end closed", timeouts, etc.
+- Shows progress: "Retry attempt 2/5..." during recovery
+
+This prevents installation failures due to intermittent network issues common on Pi Zero's slow WiFi.
+
+### System Dependency Management
+
+FRUP automatically detects and offers to install system dependencies required by certain packages:
+
+**LXST on Raspberry Pi** requires:
+- `python3-pyaudio` - Audio codec support
+- `codec2` - Speech codec library
+
+**Sideband on Raspberry Pi** requires (Debian 13 "Trixie"+):
+- `python3-pyaudio` - Audio processing
+- `codec2` - Speech codec
+- `xclip`, `xsel` - Clipboard support
+
+**Sideband on Raspberry Pi OS Bookworm (Debian 12)** requires additional build tools:
+- `python3-dev`, `build-essential` - Compilation tools
+- `libopusfile0`, `libsdl2-dev`, `libavcodec-dev`, `libavdevice-dev`, `libavfilter-dev`, `portaudio19-dev`, `libcodec2-1.0` - Audio/video libraries
+- Plus the basic dependencies above
+
+FRUP automatically detects your Debian version and uses the appropriate dependency list.
+
+When installing packages with dependencies, FRUP will:
+1. Detect your OS version (Bookworm vs Trixie)
+2. Check if dependencies are already installed
+3. Prompt to install them via `sudo apt install`
+4. Only proceed with pip install after dependencies are satisfied
+
+**Example interaction on Raspberry Pi 4 with Trixie:**
+```
+Sideband:
+  Not installed (Available: 1.8.2)
+  Do you want to install Sideband? (y/n): y
+  ℹ Sideband requires system packages: python3-pyaudio, codec2, xclip, xsel
+  Install system dependencies with 'sudo apt install'? (y/n): y
+  Installing system dependencies (this may take a while)...
+  ✓ System dependencies installed
+  Installing Sideband...
+  ✓ Sideband installed successfully!
+```
+
+**On Raspberry Pi Zero:**
+- Sideband CAN be installed but takes 30+ minutes to compile (user must confirm)
+- LXST works but may need retries due to network issues
+- Extended timeouts and automatic network retry help with slow connections
+
+This prevents cryptic compilation errors when Python packages need system libraries.
+
 ### Example Output
 
+**On a headless server:**
 ```
 ** System Information **
   Debian GNU/Linux 12 (bookworm) | x86_64 | Headless/Server | Python 3.11.2
@@ -29,18 +94,84 @@ FRUP correctly identifies and handles:
   ℹ Desktop-only packages (like Sideband) will be skipped
 ```
 
+**On Raspberry Pi Zero with Desktop:**
+```
+** System Information **
+  Raspberry Pi Zero | armv6l | Desktop | Python 3.9.2
+  ⚠ Slow system detected - package installs may take longer
+  ⚠ Pi Zero detected - using extended timeout (5 minutes)
+  ⚠ Network issues? Script will auto-retry up to 5 times
+  ⚠ Sideband compilation may take 30+ minutes (be patient!)
+```
+
+**Installing Sideband on Pi Zero:**
+```
+Sideband:
+  Not installed (Available: 1.8.2)
+  Do you want to install Sideband? (y/n): y
+  ⚠ WARNING: This will take 30+ minutes to compile on Pi Zero!
+  Are you sure you want to continue? (y/n): y
+  ℹ Sideband requires system packages: python3-pyaudio, codec2, xclip, xsel
+  Install system dependencies with 'sudo apt install'? (y/n): y
+  Installing system dependencies (this may take a while)...
+  ✓ System dependencies installed
+  Installing Sideband...
+  This may take several minutes on your system...
+  [... patiently waits 30+ minutes ...]
+  ✓ Sideband installed successfully!
+```
+
 ### Configuration
 
-Desktop-only packages are marked with `requires_desktop: true` in the configuration:
+Packages can specify system dependencies with automatic Debian version detection:
 
+**LXST (simple dependencies):**
+```json
+{
+  "name": "lxst",
+  "pypi_name": "lxst",
+  "system_dependencies": {
+    "debian": ["python3-pyaudio", "codec2"],
+    "check_command": "apt"
+  }
+}
+```
+
+**Sideband (version-specific dependencies):**
 ```json
 {
   "name": "sideband",
-  "display_name": "Sideband",
   "pypi_name": "sbapp",
-  "requires_desktop": true
+  "requires_desktop": true,
+  "slow_on_pi_zero": true,
+  "system_dependencies": {
+    "debian": ["python3-pyaudio", "codec2", "xclip", "xsel"],
+    "debian_bookworm": [
+      "python3-pip", "python3-pyaudio", "python3-dev",
+      "python3-cryptography", "build-essential", "libopusfile0",
+      "libsdl2-dev", "libavcodec-dev", "libavdevice-dev",
+      "libavfilter-dev", "portaudio19-dev", "codec2",
+      "libcodec2-1.0", "xclip", "xsel"
+    ],
+    "check_command": "apt"
+  }
 }
 ```
+
+- `debian`: Dependencies for Debian 13+ (Trixie and newer)
+- `debian_bookworm`: Extra build dependencies for Debian 12 (Bookworm)
+- `slow_on_pi_zero`: Warns user about 30+ minute compilation time
+- FRUP automatically detects your Debian version and uses the right list
+
+**Sideband on Pi Zero:**
+
+While Sideband CAN be installed on Pi Zero with Desktop environment, compilation takes 30+ minutes due to the slow ARM11 CPU. FRUP will:
+1. Warn you about the long compilation time
+2. Ask for confirmation before proceeding
+3. Use extended timeout and network retry
+4. Eventually succeed if you're patient!
+
+---
 
 ---
 

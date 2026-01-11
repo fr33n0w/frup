@@ -389,6 +389,7 @@ class ReticulumUpdater:
                 print(f"  {YELLOW}⚠ Slow system detected - package installs may take longer{RESET}")
                 if self.system.is_pi_zero:
                     print(f"  {YELLOW}⚠ Pi Zero detected - using extended timeout (5 minutes){RESET}")
+                    print(f"  {YELLOW}⚠ Network issues? Script will auto-retry up to 5 times{RESET}")
             
             # Warn about desktop-only packages if no desktop detected
             if self.system.should_skip_desktop_packages():
@@ -446,6 +447,57 @@ class ReticulumUpdater:
             return 240  # 4 minutes for other slow systems
         else:
             return 120  # 2 minutes for normal systems
+    
+    def install_package_with_retry(self, pip_cmd: list, display_name: str, max_retries: int = 3) -> tuple:
+        """Install package with retry logic for network failures"""
+        install_timeout = self.get_install_timeout()
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0 and not self.quiet:
+                    print(f"  {YELLOW}Retry attempt {attempt + 1}/{max_retries}...{RESET}")
+                
+                result = subprocess.run(
+                    pip_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=install_timeout
+                )
+                
+                # Check for network errors that warrant a retry
+                if result.returncode != 0:
+                    stderr_lower = result.stderr.lower()
+                    # Network-related errors that should trigger retry
+                    network_errors = [
+                        'connection aborted',
+                        'connection broken',
+                        'remote end closed',
+                        'connection reset',
+                        'connection refused',
+                        'timeout',
+                        'network is unreachable'
+                    ]
+                    
+                    if any(err in stderr_lower for err in network_errors) and attempt < max_retries - 1:
+                        if not self.quiet:
+                            print(f"  {YELLOW}Network error detected, retrying...{RESET}")
+                        continue
+                
+                # Return result (success or non-network failure)
+                return (result.returncode, result.stderr)
+            
+            except subprocess.TimeoutExpired:
+                if attempt < max_retries - 1:
+                    if not self.quiet:
+                        print(f"  {YELLOW}Installation timeout, retrying...{RESET}")
+                    continue
+                return (-1, "Installation timeout")
+            
+            except Exception as e:
+                return (-1, str(e))
+        
+        # All retries exhausted
+        return (result.returncode, result.stderr)
     
     def fetch_online_versions(self):
         """Fetch all online versions (PyPI first, then GitHub)"""
@@ -605,23 +657,15 @@ class ReticulumUpdater:
                     # Use pypi_name for pip install if available
                     pip_package_name = package.get('pypi_name') or package['name']
                     
-                    # Get appropriate timeout for this system
-                    install_timeout = self.get_install_timeout()
-                    
                     # Prepare pip command
                     pip_cmd = ["pip", "install", "--upgrade", pip_package_name]
                     
                     # Try without --break-system-packages first
                     try:
-                        result = subprocess.run(
-                            pip_cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=install_timeout
-                        )
+                        returncode, stderr = self.install_package_with_retry(pip_cmd, display_name, max_retries=1)
                         
                         # If failed due to externally-managed-environment, retry with flag
-                        if result.returncode != 0 and "externally-managed-environment" in result.stderr:
+                        if returncode != 0 and "externally-managed-environment" in stderr:
                             if not self.quiet:
                                 print(f"  {YELLOW}System requires --break-system-packages flag, retrying...{RESET}")
                             self.needs_break_system = True
@@ -644,29 +688,39 @@ class ReticulumUpdater:
                                     self.failed.append(display_name)
                                     continue
                             
-                            # Retry with the flag and extended timeout for slow systems
+                            # Retry with the flag and network retry support
                             if self.system.is_slow_system and not self.quiet:
                                 print(f"  {CYAN}This may take several minutes on your system...{RESET}")
                             
-                            result = subprocess.run(
-                                pip_cmd,
-                                capture_output=True,
-                                text=True,
-                                timeout=install_timeout
-                            )
+                            # Use more retries for slow/unstable systems
+                            max_retries = 5 if self.system.is_pi_zero else 3
+                            returncode, stderr = self.install_package_with_retry(pip_cmd, display_name, max_retries=max_retries)
                         
-                        if result.returncode == 0:
+                        if returncode == 0:
                             print(f"  {GREEN}✓ {display_name} {action}d successfully!{RESET}")
                             self.updated.append(display_name)
+                        elif returncode == -1 and stderr == "Installation timeout":
+                            print(f"  {RED}✗ {action.capitalize()} timeout for {display_name}{RESET}")
+                            self.failed.append(display_name)
                         else:
                             print(f"  {RED}✗ Failed to {action} {display_name}{RESET}")
-                            if result.stderr and not "externally-managed-environment" in result.stderr:
-                                print(f"    Error: {result.stderr[:200]}")
+                            # Show concise error message
+                            if stderr:
+                                # Extract most relevant error line
+                                error_lines = stderr.strip().split('\n')
+                                # Look for ERROR: lines
+                                error_msg = None
+                                for line in error_lines:
+                                    if 'ERROR:' in line:
+                                        error_msg = line.strip()
+                                        break
+                                if not error_msg and error_lines:
+                                    # Show last non-empty line
+                                    error_msg = [l for l in error_lines if l.strip()][-1][:150]
+                                
+                                if error_msg and "externally-managed-environment" not in error_msg:
+                                    print(f"    {error_msg}")
                             self.failed.append(display_name)
-                    
-                    except subprocess.TimeoutExpired:
-                        print(f"  {RED}✗ {action.capitalize()} timeout for {display_name}{RESET}")
-                        self.failed.append(display_name)
                     
                     except Exception as e:
                         print(f"  {RED}✗ Error {action}ing {display_name}: {str(e)}{RESET}")
@@ -744,6 +798,7 @@ Changes in v1.0:
   - Detects Termux, Raspbian, Pi Zero, and other special environments
   - Shows system information before update checks
   - Extended timeout for slow systems (Pi Zero gets 5 minutes)
+  - Automatic retry on network failures (up to 5 times on Pi Zero)
         """
     )
     

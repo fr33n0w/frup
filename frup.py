@@ -213,7 +213,8 @@ class ReticulumUpdater:
              'url': 'https://github.com/markqvist/nomadnet'},
             {'name': 'sideband', 'display_name': 'Sideband', 'pypi_name': 'sbapp', 
              'url': 'https://github.com/markqvist/Sideband',
-             'requires_desktop': True},  # Mark as desktop-only
+             'requires_desktop': True,
+             'skip_on_pi_zero': True},  # Sideband requires compilation, too heavy for Pi Zero
             
             # Software - GitHub only (manual install)
             {'name': 'meshchat', 'display_name': 'MeshChat', 'pypi_name': None,
@@ -296,7 +297,8 @@ class ReticulumUpdater:
                     "pypi_name": "sbapp",
                     "url": "https://github.com/markqvist/Sideband",
                     "requires_desktop": true,
-                    "comment": "PyPI package name is 'sbapp', requires desktop environment"
+                    "skip_on_pi_zero": true,
+                    "comment": "PyPI package name is 'sbapp', requires desktop environment, skipped on Pi Zero (compilation too slow)"
                 },
                 {
                     "name": "meshchat",
@@ -356,6 +358,7 @@ class ReticulumUpdater:
                 "manual_install: true = Cannot be installed via pip",
                 "online_only: true = Only check online version, don't show in updates",
                 "requires_desktop: true = Only install on systems with desktop environment",
+                "skip_on_pi_zero: true = Skip on Raspberry Pi Zero (too slow for compilation)",
                 "Set pypi_name to null for GitHub-only packages"
             ]
         }
@@ -390,6 +393,7 @@ class ReticulumUpdater:
                 if self.system.is_pi_zero:
                     print(f"  {YELLOW}⚠ Pi Zero detected - using extended timeout (5 minutes){RESET}")
                     print(f"  {YELLOW}⚠ Network issues? Script will auto-retry up to 5 times{RESET}")
+                    print(f"  {YELLOW}⚠ Sideband skipped - requires compilation (too slow for Pi Zero){RESET}")
             
             # Warn about desktop-only packages if no desktop detected
             if self.system.should_skip_desktop_packages():
@@ -434,6 +438,9 @@ class ReticulumUpdater:
     
     def should_skip_package(self, package: dict) -> bool:
         """Determine if a package should be skipped based on system requirements"""
+        # Check if package should be skipped on Pi Zero
+        if package.get('skip_on_pi_zero') and self.system.is_pi_zero:
+            return True
         # Check if package requires desktop
         if package.get('requires_desktop') and self.system.should_skip_desktop_packages():
             return True
@@ -510,7 +517,8 @@ class ReticulumUpdater:
             # Skip if system requirements not met
             if self.should_skip_package(package):
                 if not self.quiet and not package.get('online_only'):
-                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped (requires desktop)")
+                    skip_reason = "requires desktop" if package.get('requires_desktop') else "not compatible with Pi Zero"
+                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped ({skip_reason})")
                 continue
             
             # Try PyPI first if pypi_name is specified

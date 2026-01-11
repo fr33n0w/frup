@@ -1,3 +1,49 @@
+# Fast Reticulum Updater (FRUP) v1.0
+
+## 🆕 What's New in v1.0
+
+### System Detection & Smart Package Management
+
+FRUP now automatically detects your system environment and intelligently handles package compatibility:
+
+- **Automatic System Detection**: Identifies your OS, architecture, desktop environment, and special environments (Termux, Raspbian, SSH sessions)
+- **Desktop Environment Detection**: Checks for X11, Wayland, and other desktop indicators
+- **Smart Package Skipping**: Automatically skips desktop-only packages (like Sideband) on headless systems
+- **System Info Display**: Shows detailed system information before running update checks
+
+### Supported Environments
+
+FRUP correctly identifies and handles:
+- 🖥️ **Desktop Systems**: Full package support including Sideband
+- 🤖 **Termux (Android)**: Automatically skips desktop-only packages
+- 🥧 **Raspberry Pi OS**: Detects headless vs desktop configurations
+- 🖧 **SSH/Server**: Recognizes remote sessions without desktop
+- 🐧 **Headless Linux**: Works on servers and minimal installations
+
+### Example Output
+
+```
+** System Information **
+  Debian GNU/Linux 12 (bookworm) | x86_64 | Headless/Server | Python 3.11.2
+  ℹ No desktop environment detected
+  ℹ Desktop-only packages (like Sideband) will be skipped
+```
+
+### Configuration
+
+Desktop-only packages are marked with `requires_desktop: true` in the configuration:
+
+```json
+{
+  "name": "sideband",
+  "display_name": "Sideband",
+  "pypi_name": "sbapp",
+  "requires_desktop": true
+}
+```
+
+---
+
 # 🎉 FRUP v0.9 Update - PyPI-First Approach!
 
 > **Important Update (January 2026):** FRUP has been updated to check PyPI instead of GitHub for package versions. This makes version checking faster, more reliable, and aligns with how Reticulum packages are now being released.

@@ -37,8 +37,10 @@ class SystemDetector:
         self.machine = platform.machine()
         self.is_termux = self.detect_termux()
         self.is_raspbian = self.detect_raspbian()
+        self.is_pi_zero = self.detect_pi_zero()
         self.has_desktop = self.detect_desktop_environment()
         self.python_version = platform.python_version()
+        self.is_slow_system = self.detect_slow_system()
         
     def detect_termux(self) -> bool:
         """Detect if running on Termux (Android)"""
@@ -53,6 +55,49 @@ class SystemDetector:
                     return 'raspbian' in content or 'raspberry' in content
         except:
             pass
+        return False
+    
+    def detect_pi_zero(self) -> bool:
+        """Detect if running on Raspberry Pi Zero (very slow single-core)"""
+        try:
+            # Check /proc/cpuinfo for Pi Zero identifiers
+            if os.path.exists('/proc/cpuinfo'):
+                with open('/proc/cpuinfo', 'r') as f:
+                    content = f.read().lower()
+                    # Pi Zero has BCM2835 and single core
+                    if 'bcm2835' in content or 'bcm2708' in content:
+                        # Check if single core
+                        if content.count('processor') == 1:
+                            return True
+            # Check device model
+            if os.path.exists('/proc/device-tree/model'):
+                with open('/proc/device-tree/model', 'r') as f:
+                    model = f.read().lower()
+                    if 'pi zero' in model or 'pi 1' in model:
+                        return True
+        except:
+            pass
+        return False
+    
+    def detect_slow_system(self) -> bool:
+        """Detect if system is likely to be slow (single-core, low-power)"""
+        # Pi Zero is definitely slow
+        if self.is_pi_zero:
+            return True
+        
+        # Check CPU count
+        try:
+            import multiprocessing
+            cpu_count = multiprocessing.cpu_count()
+            if cpu_count == 1:
+                return True
+        except:
+            pass
+        
+        # Termux on older Android devices can be slow
+        if self.is_termux:
+            return True
+        
         return False
     
     def detect_desktop_environment(self) -> bool:
@@ -92,6 +137,8 @@ class SystemDetector:
         # OS Type
         if self.is_termux:
             parts.append("Termux (Android)")
+        elif self.is_pi_zero:
+            parts.append("Raspberry Pi Zero")
         elif self.is_raspbian:
             parts.append("Raspberry Pi OS")
         elif self.os_type == 'Linux':
@@ -337,6 +384,12 @@ class ReticulumUpdater:
             system_desc = self.system.get_system_description()
             print(f"  {CYAN}{system_desc}{RESET}")
             
+            # Warn about slow systems
+            if self.system.is_slow_system:
+                print(f"  {YELLOW}⚠ Slow system detected - package installs may take longer{RESET}")
+                if self.system.is_pi_zero:
+                    print(f"  {YELLOW}⚠ Pi Zero detected - using extended timeout (5 minutes){RESET}")
+            
             # Warn about desktop-only packages if no desktop detected
             if self.system.should_skip_desktop_packages():
                 print(f"  {YELLOW}ℹ No desktop environment detected{RESET}")
@@ -384,6 +437,15 @@ class ReticulumUpdater:
         if package.get('requires_desktop') and self.system.should_skip_desktop_packages():
             return True
         return False
+    
+    def get_install_timeout(self) -> int:
+        """Get appropriate timeout for pip install based on system speed"""
+        if self.system.is_pi_zero:
+            return 300  # 5 minutes for Pi Zero
+        elif self.system.is_slow_system:
+            return 240  # 4 minutes for other slow systems
+        else:
+            return 120  # 2 minutes for normal systems
     
     def fetch_online_versions(self):
         """Fetch all online versions (PyPI first, then GitHub)"""
@@ -543,6 +605,9 @@ class ReticulumUpdater:
                     # Use pypi_name for pip install if available
                     pip_package_name = package.get('pypi_name') or package['name']
                     
+                    # Get appropriate timeout for this system
+                    install_timeout = self.get_install_timeout()
+                    
                     # Prepare pip command
                     pip_cmd = ["pip", "install", "--upgrade", pip_package_name]
                     
@@ -552,7 +617,7 @@ class ReticulumUpdater:
                             pip_cmd,
                             capture_output=True,
                             text=True,
-                            timeout=120
+                            timeout=install_timeout
                         )
                         
                         # If failed due to externally-managed-environment, retry with flag
@@ -579,12 +644,15 @@ class ReticulumUpdater:
                                     self.failed.append(display_name)
                                     continue
                             
-                            # Retry with the flag
+                            # Retry with the flag and extended timeout for slow systems
+                            if self.system.is_slow_system and not self.quiet:
+                                print(f"  {CYAN}This may take several minutes on your system...{RESET}")
+                            
                             result = subprocess.run(
                                 pip_cmd,
                                 capture_output=True,
                                 text=True,
-                                timeout=120
+                                timeout=install_timeout
                             )
                         
                         if result.returncode == 0:
@@ -673,8 +741,9 @@ Examples:
 Changes in v1.0:
   - Added system detection (OS, architecture, desktop environment)
   - Automatically skips desktop-only packages (like Sideband) on headless systems
-  - Detects Termux, Raspbian, and other special environments
+  - Detects Termux, Raspbian, Pi Zero, and other special environments
   - Shows system information before update checks
+  - Extended timeout for slow systems (Pi Zero gets 5 minutes)
         """
     )
     

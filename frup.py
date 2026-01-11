@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Fast Reticulum Updater v0.9
+Fast Reticulum Updater v1.0
 Author: F
-Improvements: PyPI-first approach, efficiency, error handling, CLI arguments, colored output, summary
+Improvements: PyPI-first approach, efficiency, error handling, CLI arguments, colored output, summary, system detection
 """
 
 import requests
@@ -11,6 +11,7 @@ import sys
 import argparse
 import json
 import os
+import platform
 from typing import Dict, List, Optional
 
 # Try to import colorama for colored output
@@ -26,6 +27,109 @@ try:
 except ImportError:
     # Fallback if colorama not installed
     GREEN = RED = YELLOW = CYAN = RESET = BRIGHT = ""
+
+class SystemDetector:
+    """Detect system information and capabilities"""
+    
+    def __init__(self):
+        self.os_type = platform.system()
+        self.os_release = platform.release()
+        self.machine = platform.machine()
+        self.is_termux = self.detect_termux()
+        self.is_raspbian = self.detect_raspbian()
+        self.has_desktop = self.detect_desktop_environment()
+        self.python_version = platform.python_version()
+        
+    def detect_termux(self) -> bool:
+        """Detect if running on Termux (Android)"""
+        return os.path.exists('/data/data/com.termux') or 'com.termux' in os.environ.get('PREFIX', '')
+    
+    def detect_raspbian(self) -> bool:
+        """Detect if running on Raspbian/Raspberry Pi OS"""
+        try:
+            if os.path.exists('/etc/os-release'):
+                with open('/etc/os-release', 'r') as f:
+                    content = f.read().lower()
+                    return 'raspbian' in content or 'raspberry' in content
+        except:
+            pass
+        return False
+    
+    def detect_desktop_environment(self) -> bool:
+        """Detect if a desktop environment is available"""
+        # Check for Termux (no desktop)
+        if self.is_termux:
+            return False
+        
+        # Check common desktop environment variables
+        desktop_vars = ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_CURRENT_DESKTOP', 'DESKTOP_SESSION']
+        if any(os.environ.get(var) for var in desktop_vars):
+            return True
+        
+        # Check for X11 or Wayland
+        if os.path.exists('/tmp/.X11-unix') or os.path.exists('/run/user'):
+            return True
+        
+        # For Windows, assume desktop is available
+        if self.os_type == 'Windows':
+            return True
+        
+        # For macOS, assume desktop is available
+        if self.os_type == 'Darwin':
+            return True
+        
+        # Check if running in SSH session (likely headless)
+        if os.environ.get('SSH_CONNECTION') or os.environ.get('SSH_CLIENT'):
+            return False
+        
+        # Default to False for server/headless systems
+        return False
+    
+    def get_system_description(self) -> str:
+        """Get a human-readable system description"""
+        parts = []
+        
+        # OS Type
+        if self.is_termux:
+            parts.append("Termux (Android)")
+        elif self.is_raspbian:
+            parts.append("Raspberry Pi OS")
+        elif self.os_type == 'Linux':
+            # Try to get distribution name
+            try:
+                if os.path.exists('/etc/os-release'):
+                    with open('/etc/os-release', 'r') as f:
+                        for line in f:
+                            if line.startswith('PRETTY_NAME='):
+                                distro = line.split('=')[1].strip().strip('"')
+                                parts.append(distro)
+                                break
+                        else:
+                            parts.append(f"Linux {self.os_release}")
+                else:
+                    parts.append(f"Linux {self.os_release}")
+            except:
+                parts.append(f"Linux {self.os_release}")
+        else:
+            parts.append(f"{self.os_type} {self.os_release}")
+        
+        # Architecture
+        parts.append(self.machine)
+        
+        # Desktop status
+        if self.has_desktop:
+            parts.append("Desktop")
+        else:
+            parts.append("Headless/Server")
+        
+        # Python version
+        parts.append(f"Python {self.python_version}")
+        
+        return " | ".join(parts)
+    
+    def should_skip_desktop_packages(self) -> bool:
+        """Determine if desktop-only packages should be skipped"""
+        return not self.has_desktop
 
 class ReticulumUpdater:
     def __init__(self, auto_update=False, quiet=False, check_only=False, break_system=False):
@@ -43,6 +147,9 @@ class ReticulumUpdater:
         self.config_path = None
         self.needs_break_system = False
         
+        # Detect system
+        self.system = SystemDetector()
+        
         # Default packages - can be overridden by config file
         # NOTE: PyPI package names are used for pip installation
         self.packages = [
@@ -58,7 +165,8 @@ class ReticulumUpdater:
             {'name': 'nomadnet', 'display_name': 'NomadNet', 'pypi_name': 'nomadnet', 
              'url': 'https://github.com/markqvist/nomadnet'},
             {'name': 'sideband', 'display_name': 'Sideband', 'pypi_name': 'sbapp', 
-             'url': 'https://github.com/markqvist/Sideband'},
+             'url': 'https://github.com/markqvist/Sideband',
+             'requires_desktop': True},  # Mark as desktop-only
             
             # Software - GitHub only (manual install)
             {'name': 'meshchat', 'display_name': 'MeshChat', 'pypi_name': None,
@@ -140,7 +248,8 @@ class ReticulumUpdater:
                     "display_name": "Sideband",
                     "pypi_name": "sbapp",
                     "url": "https://github.com/markqvist/Sideband",
-                    "comment": "PyPI package name is 'sbapp'"
+                    "requires_desktop": true,
+                    "comment": "PyPI package name is 'sbapp', requires desktop environment"
                 },
                 {
                     "name": "meshchat",
@@ -199,6 +308,7 @@ class ReticulumUpdater:
                 "display_name: Human-readable name shown to user",
                 "manual_install: true = Cannot be installed via pip",
                 "online_only: true = Only check online version, don't show in updates",
+                "requires_desktop: true = Only install on systems with desktop environment",
                 "Set pypi_name to null for GitHub-only packages"
             ]
         }
@@ -218,15 +328,25 @@ class ReticulumUpdater:
         if not self.quiet:
             print()
             print(f"{BRIGHT}=============================================={RESET}")
-            print(f"{BRIGHT}      Fast Reticulum Updater v0.9 by F{RESET}")
-            print(f"{BRIGHT}      Now with PyPI-first checking!{RESET}")
+            print(f"{BRIGHT}      Fast Reticulum Updater v1.0 by F{RESET}")
+            print(f"{BRIGHT}      Now with System Detection!{RESET}")
             print(f"{BRIGHT}=============================================={RESET}")
+            
+            # Show system information
+            print(f"\n{BRIGHT}** System Information **{RESET}")
+            system_desc = self.system.get_system_description()
+            print(f"  {CYAN}{system_desc}{RESET}")
+            
+            # Warn about desktop-only packages if no desktop detected
+            if self.system.should_skip_desktop_packages():
+                print(f"  {YELLOW}ℹ No desktop environment detected{RESET}")
+                print(f"  {YELLOW}ℹ Desktop-only packages (like Sideband) will be skipped{RESET}")
             
             # Show config status
             if self.using_custom_config:
-                print(f"{CYAN}Using custom config: {self.config_path}{RESET}")
+                print(f"\n{CYAN}Using custom config: {self.config_path}{RESET}")
             else:
-                print(f"{CYAN}Using default configuration{RESET}")
+                print(f"\n{CYAN}Using default configuration{RESET}")
     
     def fetch_pypi_version(self, package_name: str) -> Optional[str]:
         """Fetch version from PyPI"""
@@ -258,6 +378,13 @@ class ReticulumUpdater:
         except requests.exceptions.RequestException:
             return None
     
+    def should_skip_package(self, package: dict) -> bool:
+        """Determine if a package should be skipped based on system requirements"""
+        # Check if package requires desktop
+        if package.get('requires_desktop') and self.system.should_skip_desktop_packages():
+            return True
+        return False
+    
     def fetch_online_versions(self):
         """Fetch all online versions (PyPI first, then GitHub)"""
         if not self.quiet:
@@ -265,6 +392,12 @@ class ReticulumUpdater:
         
         for package in self.packages:
             display_name = package.get('display_name', package['name'])
+            
+            # Skip if system requirements not met
+            if self.should_skip_package(package):
+                if not self.quiet and not package.get('online_only'):
+                    print(f"  {YELLOW}−{RESET} {display_name}: Skipped (requires desktop)")
+                continue
             
             # Try PyPI first if pypi_name is specified
             if package.get('pypi_name'):
@@ -290,6 +423,11 @@ class ReticulumUpdater:
         
         for package in self.packages:
             display_name = package.get('display_name', package['name'])
+            
+            # Skip if system requirements not met
+            if self.should_skip_package(package):
+                self.local_versions[package['name']] = None
+                continue
             
             # Skip packages marked as online_only or skip_local_check
             if package.get('skip_local_check') or package.get('online_only'):
@@ -340,6 +478,10 @@ class ReticulumUpdater:
             print(f"\n{BRIGHT}** Version Comparison & Update **{RESET}")
         
         for package in self.packages:
+            # Skip if system requirements not met
+            if self.should_skip_package(package):
+                continue
+            
             # Skip certain packages
             if package.get('skip_version_comparison') or package.get('online_only'):
                 continue
@@ -494,9 +636,9 @@ class ReticulumUpdater:
         # Final status
         print(f"\n{BRIGHT}=============================================={RESET}")
         if self.check_only:
-            print(f"{BRIGHT}     Check Complete! F.R.U. v0.9 END{RESET}")
+            print(f"{BRIGHT}     Check Complete! F.R.U. v1.0 END{RESET}")
         else:
-            print(f"{BRIGHT}     Update Process Complete! F.R.U. v0.9 END{RESET}")
+            print(f"{BRIGHT}     Update Process Complete! F.R.U. v1.0 END{RESET}")
         print(f"{BRIGHT}=============================================={RESET}")
     
     def run(self):
@@ -517,7 +659,7 @@ class ReticulumUpdater:
 def main():
     """Main entry point with argument parsing"""
     parser = argparse.ArgumentParser(
-        description='Fast Reticulum Updater v0.9 - Update Reticulum ecosystem packages',
+        description='Fast Reticulum Updater v1.0 - Update Reticulum ecosystem packages',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -528,11 +670,11 @@ Examples:
   frup.py --save-config    # Save example config file
   frup.py -b --auto        # Auto-update with --break-system-packages
 
-Changes in v0.9:
-  - Now checks PyPI first (faster, more reliable)
-  - Added LXST and Columba packages
-  - Sideband now uses correct PyPI name (sbapp)
-  - GitHub used only for non-PyPI packages
+Changes in v1.0:
+  - Added system detection (OS, architecture, desktop environment)
+  - Automatically skips desktop-only packages (like Sideband) on headless systems
+  - Detects Termux, Raspbian, and other special environments
+  - Shows system information before update checks
         """
     )
     
@@ -569,7 +711,7 @@ Changes in v0.9:
     parser.add_argument(
         '--version', '-v',
         action='version',
-        version='Fast Reticulum Updater v0.9'
+        version='Fast Reticulum Updater v1.0'
     )
     
     args = parser.parse_args()
